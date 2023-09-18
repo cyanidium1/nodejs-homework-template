@@ -1,33 +1,48 @@
-const express = require("express");
+const mongoose = require("mongoose");
+const request = require("supertest");
 
-const ctrl = require("../../controllers/auth");
+const app = require("../../app");
 
-const { validateBody } = require("../../decorators");
+const { HOST_TEST } = process.env;
 
-const { authenticate, upload } = require("../../middlewares");
+const signInData = {
+  email: "1@gmail.com",
+  password: "123456",
+};
 
-const schemas = require("../../schemas/users");
+describe("test sign in route", () => {
+  let server = null;
+  beforeAll(async () => {
+    await mongoose.connect(HOST_TEST);
+    server = app.listen(3000);
+  });
 
-const router = express.Router();
+  afterAll(async () => {
+    await mongoose.connection.close();
+    server.close();
+  });
 
-const userSignUpMiddleware = validateBody(schemas.userSignUpSchema);
-const userSignInMiddleware = validateBody(schemas.userSignInSchema);
+  test("test sign in with correct data", async () => {
+    const { statusCode, body } = await request(app)
+      .post("/api/users/login")
+      .send(signInData);
+    expect(statusCode).toBe(200);
+    expect(body.email).toBe(signInData.email);
+  });
 
-router.post("/register", userSignUpMiddleware, ctrl.signUp);
+  test("test to have property token and subscription", async () => {
+    const { body } = await request(app)
+      .post("/api/users/login")
+      .send(signInData);
+    expect(body).toHaveProperty("token");
+    expect(body).toHaveProperty("subscription");
+  });
 
-router.post("/login", userSignInMiddleware, ctrl.signIn);
-
-router.post("/logout", authenticate, ctrl.logout);
-
-router.get("/current", authenticate, ctrl.getCurrent);
-
-router.patch("/", authenticate, ctrl.updateSubscription);
-
-router.patch(
-  "/avatars",
-  authenticate,
-  upload.single("avatar"),
-  ctrl.updateAvatar
-);
-
-module.exports = router;
+  test("test user data types", async () => {
+    const { body } = await request(app)
+      .post("/api/users/login")
+      .send(signInData);
+    expect(typeof body.email).toBe("string");
+    expect(typeof body.subscription).toBe("string");
+  });
+});
